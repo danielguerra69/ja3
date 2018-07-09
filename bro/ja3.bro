@@ -16,7 +16,7 @@ export {
 redef enum Log::ID += { LOG };
 }
 
-type TLSFPStorage: record {
+type JA3FPStorage: record {
        client_version:  count &default=0 &log;
        client_ciphers:  string &default="" &log;
        extensions:      string &default="" &log;
@@ -25,12 +25,12 @@ type TLSFPStorage: record {
 };
 
 redef record connection += {
-       tlsfp: TLSFPStorage &optional;
+       ja3fp: JA3FPStorage &optional;
 };
 
 redef record SSL::Info += {
   ja3:            string &optional &log;
-  ja3_client      string &optional &log;
+  ja3_client:     string &optional &log;
 # LOG FIELD VALUES ##
 #  ja3_version:  string &optional &log;
 #  ja3_ciphers:  string &optional &log;
@@ -60,40 +60,40 @@ const grease: set[int] = {
 };
 const sep = "-";
 event bro_init() {
-    Log::create_stream(JA3::LOG,[$columns=TLSFPStorage, $path="tlsfp"]);
+    Log::create_stream(JA3::LOG,[$columns=JA3FPStorage, $path="ja3fp"]);
 }
 
 event ssl_extension(c: connection, is_orig: bool, code: count, val: string)
 {
-if ( ! c?$tlsfp )
-    c$tlsfp=TLSFPStorage();
+if ( ! c?$ja3fp )
+    c$ja3fp=JA3FPStorage();
     if ( is_orig = T ) {
         if ( code in grease ) {
             next;
         }
-        if ( c$tlsfp$extensions == "" ) {
-            c$tlsfp$extensions = cat(code);
+        if ( c$ja3fp$extensions == "" ) {
+            c$ja3fp$extensions = cat(code);
         }
         else {
-            c$tlsfp$extensions = string_cat(c$tlsfp$extensions, sep,cat(code));
+            c$ja3fp$extensions = string_cat(c$ja3fp$extensions, sep,cat(code));
         }
     }
 }
 
 event ssl_extension_ec_point_formats(c: connection, is_orig: bool, point_formats: index_vec)
 {
-if ( !c?$tlsfp )
-    c$tlsfp=TLSFPStorage();
+if ( !c?$ja3fp )
+    c$ja3fp=JA3FPStorage();
     if ( is_orig = T ) {
         for ( i in point_formats ) {
             if ( point_formats[i] in grease ) {
             next;
             }
-            if ( c$tlsfp$ec_point_fmt == "" ) {
-            c$tlsfp$ec_point_fmt += cat(point_formats[i]);
+            if ( c$ja3fp$ec_point_fmt == "" ) {
+            c$ja3fp$ec_point_fmt += cat(point_formats[i]);
             }
             else {
-            c$tlsfp$ec_point_fmt += string_cat(sep,cat(point_formats[i]));
+            c$ja3fp$ec_point_fmt += string_cat(sep,cat(point_formats[i]));
             }
         }
     }
@@ -101,18 +101,18 @@ if ( !c?$tlsfp )
 
 event ssl_extension_elliptic_curves(c: connection, is_orig: bool, curves: index_vec)
 {
-    if ( !c?$tlsfp )
-    c$tlsfp=TLSFPStorage();
+    if ( !c?$ja3fp )
+    c$ja3fp=JA3FPStorage();
     if ( is_orig = T  ) {
         for ( i in curves ) {
             if ( curves[i] in grease ) {
             next;
             }
-            if ( c$tlsfp$e_curves == "" ) {
-                c$tlsfp$e_curves += cat(curves[i]);
+            if ( c$ja3fp$e_curves == "" ) {
+                c$ja3fp$e_curves += cat(curves[i]);
             }
             else {
-                c$tlsfp$e_curves += string_cat(sep,cat(curves[i]));
+                c$ja3fp$e_curves += string_cat(sep,cat(curves[i]));
             }
         }
     }
@@ -120,37 +120,38 @@ event ssl_extension_elliptic_curves(c: connection, is_orig: bool, curves: index_
 
 event ssl_client_hello(c: connection, version: count, possible_ts: time, client_random: string, session_id: string, ciphers: index_vec) &priority=1
 {
-    if ( !c?$tlsfp )
-    c$tlsfp=TLSFPStorage();
-    c$tlsfp$client_version = version;
+    if ( !c?$ja3fp )
+    c$ja3fp=JA3FPStorage();
+    c$ja3fp$client_version = version;
     for ( i in ciphers ) {
         if ( ciphers[i] in grease ) {
             next;
         }
-        if ( c$tlsfp$client_ciphers == "" ) { 
-            c$tlsfp$client_ciphers += cat(ciphers[i]);
+        if ( c$ja3fp$client_ciphers == "" ) {
+            c$ja3fp$client_ciphers += cat(ciphers[i]);
         }
         else {
-            c$tlsfp$client_ciphers += string_cat(sep,cat(ciphers[i]));
+            c$ja3fp$client_ciphers += string_cat(sep,cat(ciphers[i]));
         }
     }
     local sep2 = ",";
-    local ja3_string = string_cat(cat(c$tlsfp$client_version),sep2,c$tlsfp$client_ciphers,sep2,c$tlsfp$extensions,sep2,c$tlsfp$e_curves,sep2,c$tlsfp$ec_point_fmt);
-    local tlsfp_1 = md5_hash(ja3_string);
-    c$ssl$ja3 = tlsfp_1;
-    if ( tlsfp_1 in JA3Fingerprinting::database ) {
-        c$ssl$ja3_client = JA3Fingerprinting::database[tlsfp_1];
+    local ja3_string = string_cat(cat(c$ja3fp$client_version),sep2,c$ja3fp$client_ciphers,sep2,c$ja3fp$extensions,sep2,c$ja3fp$e_curves,sep2,c$ja3fp$ec_point_fmt);
+    local ja3fp_1 = md5_hash(ja3_string);
+    c$ssl$ja3 = ja3fp_1;
+    if ( ja3fp_1 in JA3Fingerprinting::database ) {
+        c$ssl$ja3_client = JA3Fingerprinting::database[ja3fp_1];
     }
 
 
+
 # LOG FIELD VALUES ##
-#c$ssl$ja3_version = cat(c$tlsfp$client_version);
-#c$ssl$ja3_ciphers = c$tlsfp$client_ciphers;
-#c$ssl$ja3_extensions = c$tlsfp$extensions;
-#c$ssl$ja3_ec = c$tlsfp$e_curves;
-#c$ssl$ja3_ec_fmt = c$tlsfp$ec_point_fmt;
+#c$ssl$ja3_version = cat(c$ja3fp$client_version);
+#c$ssl$ja3_ciphers = c$ja3fp$client_ciphers;
+#c$ssl$ja3_extensions = c$ja3fp$extensions;
+#c$ssl$ja3_ec = c$ja3fp$e_curves;
+#c$ssl$ja3_ec_fmt = c$ja3fp$ec_point_fmt;
 #
 # FOR DEBUGGING ##
-#print "JA3: "+tlsfp_1+" Fingerprint String: "+ja3_string;
+#print "JA3: "+ja3fp_1+" Fingerprint String: "+ja3_string;
 
 }

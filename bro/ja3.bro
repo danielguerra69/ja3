@@ -8,6 +8,8 @@
 # Licensed under the BSD 3-Clause license. 
 # For full license text, see LICENSE.txt file in the repo root  or https://opensource.org/licenses/BSD-3-Clause
 
+@load ./ja3_db
+
 module JA3;
 
 export {
@@ -28,6 +30,7 @@ redef record connection += {
 
 redef record SSL::Info += {
   ja3:            string &optional &log;
+  ja3_client      string &optional &log;
 # LOG FIELD VALUES ##
 #  ja3_version:  string &optional &log;
 #  ja3_ciphers:  string &optional &log;
@@ -135,6 +138,10 @@ event ssl_client_hello(c: connection, version: count, possible_ts: time, client_
     local ja3_string = string_cat(cat(c$tlsfp$client_version),sep2,c$tlsfp$client_ciphers,sep2,c$tlsfp$extensions,sep2,c$tlsfp$e_curves,sep2,c$tlsfp$ec_point_fmt);
     local tlsfp_1 = md5_hash(ja3_string);
     c$ssl$ja3 = tlsfp_1;
+    if ( tlsfp_1 in JA3Fingerprinting::database ) {
+        c$ssl$ja3_client = JA3Fingerprinting::database[tlsfp_1];
+    }
+
 
 # LOG FIELD VALUES ##
 #c$ssl$ja3_version = cat(c$tlsfp$client_version);

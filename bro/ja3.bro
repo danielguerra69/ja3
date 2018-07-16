@@ -23,11 +23,15 @@ export {
         ec_point_fmt:    string &default="" &log;
     };
 
+    const expiration_interval = 1min &redef;
 
+    global expire: function(t: table[string] of JA3FPStorage, cuid: string ): interval;
+
+    global close: function(t: JA3FPStorage,cuid: string);
+
+    global ja3fp: table[string] of JA3FPStorage &read_expire=expiration_interval &expire_func=expire;
 
 }
-
-global ja3fp: table[string] of JA3FPStorage &create_expire=10min &redef;
 
 redef record connection += {
        ja3fp: JA3FPStorage &synchronized &optional;
@@ -64,11 +68,27 @@ const grease: set[int] = {
     64250
 };
 const sep = "-";
+
 event bro_init() {
     Log::create_stream(JA3::LOG,[$columns=JA3FPStorage, $path="ja3fp"]);
 }
 
+function close(t: JA3FPStorage,cuid: string)
+	{
+	delete ja3fp[cuid];
+	}
 
+function expire(t: table[string] of JA3FPStorage, cuid: string): interval
+	{
+	close(t[cuid], cuid);
+	return 0secs;
+	}
+
+event connection_state_remove(c: connection) &priority=-5
+	{
+	if ( c$uid in ja3fp )
+		close(ja3fp[c$uid], c$uid);
+	}
 
 event ssl_extension(c: connection, is_orig: bool, code: count, val: string)
 {
@@ -148,8 +168,6 @@ event ssl_client_hello(c: connection, version: count, possible_ts: time, client_
     if ( ja3fp_1 in JA3Fingerprinting::database ) {
         c$ssl$ja3_client = JA3Fingerprinting::database[ja3fp_1];
     }
-
-
 
 # LOG FIELD VALUES ##
 #c$ssl$ja3_version = cat(c$ja3fp$client_version);
